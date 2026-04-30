@@ -5,7 +5,13 @@ Deploying the ADK code and registering it in Gemini Enterprise are separate step
 
 ## Deploying the code
 
-Use `python deploy.py` from this repo to create a Reasoning Engine / Agent Platform Runtime resource.
+Before running `deploy.py`, configure your routing mode and the corresponding env vars in your shell or `.env` file — see the [README](../README.md) for the full list. The deploy script reads `MERGE_USER_ROUTING_MODE` and `MERGE_TOOL_PACK_ROUTING_MODE` to determine which env vars to pass to the deployed agent, so the routing configuration must be set correctly before deployment.
+
+```bash
+python deploy.py
+```
+
+This creates a Reasoning Engine / Agent Platform Runtime resource and prints the resource name needed for Gemini Enterprise registration.
 
 ## Registering the deployed agent
 
