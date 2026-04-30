@@ -7,7 +7,7 @@ This repo contains a minimal Google ADK agent that connects to Merge Agent Handl
 
 Gemini Enterprise -> ADK Agent on Agent Platform Runtime -> Merge Agent Handler MCP -> Tool Pack -> Registered User -> Connected SaaS accounts
 
-This starter uses a **single shared registered user** and a **single tool pack** for initial Gemini Enterprise testing.
+Supports static (shared) or dynamic (per-user) routing for both Registered Users and Tool Packs — see [Routing modes](#routing-modes).
 
 ## Merge setup
 
@@ -15,12 +15,15 @@ In the Merge dashboard:
 
 1. Create a Tool Pack.
 2. Add the tools you want Gemini users to test.
-3. Create a Registered User.
-4. Link the relevant SaaS integrations for that Registered User.
+3. Create a Registered User for each person who will use the agent.
+   - Set `origin_user_id` to the user's **Google Workspace email address** (e.g. `user@yourcompany.com`). This is how the agent maps a Gemini Enterprise session to the correct Registered User at runtime.
+   - Set `origin_user_name` to the user's display name.
+   - If you plan to use **dynamic tool pack mapping**, populate `custom_groupings` with the team key you configure in `MERGE_TEAM_GROUPING_KEY` (default: `"Team"`). For example: `"custom_groupings": { "Team": "Engineering" }`. Users without this grouping, or whose team is not present in `MERGE_TOOL_PACK_MAP`, will fall back to the `"default"` entry in that map.
+4. Link the relevant SaaS integrations for each Registered User.
 5. Collect:
    - `MERGE_API_KEY`
-   - `MERGE_TOOL_PACK_ID`
-   - `MERGE_REGISTERED_USER_ID`
+   - `MERGE_TOOL_PACK_ID` (static mode) or tool pack UUIDs per team (dynamic mode)
+   - `MERGE_REGISTERED_USER_ID` (static mode only)
 
 The agent connects to:
 
@@ -76,16 +79,38 @@ In Google Cloud Console:
 8. Create the agent.
 9. Share the agent with test users or groups.
 
-## Phase 2: per-user routing
+## Routing modes
 
-The starter repo uses one `MERGE_REGISTERED_USER_ID` for all Gemini users.
+The agent supports three routing configurations, set via `MERGE_USER_ROUTING_MODE` and `MERGE_TOOL_PACK_ROUTING_MODE` in your `.env`:
 
-For production, keep the same org-level Merge API key and tool pack, but map:
+| User routing | Tool pack routing | Behavior |
+|---|---|---|
+| `static` | `static` | Single shared Registered User and Tool Pack for all Gemini users (default, good for initial testing) |
+| `dynamic` | `static` | Each Gemini user is mapped to their own Registered User via email; all users share one Tool Pack |
+| `dynamic` | `dynamic` | Each Gemini user is mapped to their own Registered User, and their Tool Pack is determined by their team grouping |
 
-```text
-Gemini user email -> Merge registered_user_id
+`static + dynamic` is an invalid combination and will raise an error at startup.
+
+### Dynamic user routing
+
+Set `MERGE_USER_ROUTING_MODE=dynamic`. The agent reads the authenticated Gemini Enterprise user's email from the session and calls `GET /api/v1/registered-users/?origin_user_id=<email>` to resolve their Merge Registered User. This is why `origin_user_id` must be set to the user's email when creating Registered Users (see [Merge setup](#merge-setup)).
+
+If no Registered User is found for the email, the agent responds with an error message rather than accessing any tools.
+
+### Dynamic tool pack routing
+
+Set `MERGE_TOOL_PACK_ROUTING_MODE=dynamic` (requires `MERGE_USER_ROUTING_MODE=dynamic`). Configure `MERGE_TOOL_PACK_MAP` as a JSON object mapping team names to Tool Pack UUIDs:
+
+```bash
+MERGE_TEAM_GROUPING_KEY=Team
+MERGE_TOOL_PACK_MAP={"Engineering": "uuid-1", "Sales": "uuid-2", "default": "uuid-fallback"}
 ```
 
-Then construct the MCP URL per request/session using the mapped registered user ID.
+At runtime the agent reads the user's `custom_groupings[MERGE_TEAM_GROUPING_KEY]` value from their Registered User record and uses it to select the correct Tool Pack. Users with a missing or unmapped team fall back to the `"default"` entry. If no `"default"` is configured, the agent responds with an error.
 
-The key architectural change is that `registered_user_id` becomes dynamic while `tool_pack_id` usually remains stable.
+## Reference
+
+- [Agent Handler API Reference](https://docs.merge.dev/merge-agent-handler/agent-handler)
+- [Google Agent Development Kit Documentation](https://adk.dev/get-started/python/)
+- [Google: Register and Manage ADK Agents on Gemini Enterprise Agent Platform](https://docs.cloud.google.com/gemini/enterprise/docs/register-and-manage-an-adk-agent?utm_source=chatgpt.com)
+

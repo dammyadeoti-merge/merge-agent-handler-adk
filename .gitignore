@@ -1,6 +1,13 @@
 
 .env
+tool_pack_map.json
 .venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# macOS
+.DS_Store
+
+# JetBrains / IntelliJ / PyCharm
+.idea/
